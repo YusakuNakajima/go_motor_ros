@@ -225,3 +225,7 @@ Motor 0 - CMD: pos=1.570, vel=2.000, torque=0.500, kp=10.000, kd=1.000 | RECV: p
 - sensor_msgs
 - dynamic_reconfigure
 - Unitree Motor SDK (included)
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
