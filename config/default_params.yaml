@@ -1,0 +1,33 @@
+# Default parameters for Go Motor ROS package
+
+# Motor hardware configuration
+motor_type: "GO_M8010_6"        # Type of Unitree motor
+serial_port: "/dev/serial/by-id/usb-FTDI_USB__-__Serial_Converter_FT9HN1N7-if00-port0"     # Serial port for motor communication 
+control_frequency: 5000.0       # Control loop frequency in Hz
+
+# Motor control parameters (can be overridden by dynamic reconfigure)
+# Control Mode Guide:
+# - Position Control: kp > 1.0, set target position via /go_motor_ros/motor_command/position
+# - Velocity Control: kp = 0, kd > 0, set target velocity via /go_motor_ros/motor_command/velocity  
+# - Torque Control: kp = 0, kd = 0, set target torque via /go_motor_ros/motor_command/torque
+# - Mixed Control: Combine position/velocity/torque commands with appropriate gains
+
+id: 0                        # Motor ID (0-15)
+kp: 0                        # Proportional gain for position control (0 = velocity/torque mode)
+kd: 0.1                     # Derivative gain for damping control
+
+# Recommended settings for different control modes:
+# Position control: kp=10.0, kd=1.0
+# Velocity control: kp=0.0, kd=0.01 (exact match to unitree example)
+# Torque control: kp=0.0, kd=0.01
+
+# Example motor command initial values
+initial_position: 0.0           # Initial target position (radians)
+initial_velocity: 0.0           # Initial target velocity (rad/s)
+initial_torque: 0.0             # Initial target torque (Nm)
+
+# Safety parameters
+max_position: 3.14159           # Maximum position limit (radians)
+min_position: -3.14159          # Minimum position limit (radians)
+max_velocity: 10.0              # Maximum velocity limit (rad/s)
+max_torque: 5.0                 # Maximum torque limit (Nm)

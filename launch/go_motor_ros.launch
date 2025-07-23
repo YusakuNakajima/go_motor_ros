@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- Launch file for Go Motor ROS package -->
+  
+  <!-- Config file argument -->
+  <arg name="config_file" default="$(find go_motor_ros)/config/default_params.yaml" />
+  <arg name="launch_gui_tools" default="true" />
+  
+  <!-- Load parameters from YAML file -->
+  <rosparam file="$(arg config_file)" command="load" ns="go_motor_ros/go_motor_ros_node" />
+  
+  <!-- Node for Go Motor ROS (C++ implementation) -->
+  <node name="go_motor_ros_node" pkg="go_motor_ros" type="go_motor_ros_node" output="screen" ns="go_motor_ros" />
+  
+  <!-- GUI Tools -->
+  <group if="$(arg launch_gui_tools)">
+    <!-- Launch rqt_reconfigure for dynamic parameter tuning -->
+    <node name="rqt_reconfigure" pkg="rqt_reconfigure" type="rqt_reconfigure" />
+    
+    <!-- Launch rqt_publisher for sending motor commands -->
+    <node name="rqt_publisher" pkg="rqt_publisher" type="rqt_publisher" />
+    
+    <!-- Optional: Launch rqt_graph for topic visualization -->
+    <!-- <node name="rqt_graph" pkg="rqt_graph" type="rqt_graph" /> -->
+  </group>
+  
+</launch>
