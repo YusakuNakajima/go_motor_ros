@@ -23,12 +23,12 @@
   <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>dynamic_reconfigure</exec_depend>
 
-  <build_depend>libstdc++</build_depend>
-  <exec_depend>libstdc++</exec_depend>
+<!--   <build_depend>libstdc++</build_depend>
+  <exec_depend>libstdc++</exec_depend> -->
   
   <!-- System dependencies for serial communication -->
-  <build_depend>libpthread-dev</build_depend>
-  <exec_depend>libpthread-dev</exec_depend>
+<!--   <build_depend>libpthread-dev</build_depend>
+  <exec_depend>libpthread-dev</exec_depend> -->
 
   <export>
     <build_type>catkin</build_type>
