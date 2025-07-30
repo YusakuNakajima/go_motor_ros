@@ -216,7 +216,7 @@ public:
                 // Log motor state and command periodically (every 1000 cycles = 1 second at 1000Hz)
                 static int log_counter = 0;
                 if (++log_counter >= 1000) {
-                    ROS_INFO("Motor %d - ROS CMD: pos=%.3f, vel=%.3f, torque=%.3f, kp=%.3f, kd=%.3f | MOTOR CMD: q=%.3f, dq=%.3f, tau=%.3f | RECV: pos=%.3f, vel=%.3f, torque=%.3f | GEAR: %.1f", 
+                    ROS_DEBUG("Motor %d - ROS CMD: pos=%.3f, vel=%.3f, torque=%.3f, kp=%.3f, kd=%.3f | MOTOR CMD: q=%.3f, dq=%.3f, tau=%.3f | RECV: pos=%.3f, vel=%.3f, torque=%.3f | GEAR: %.1f", 
                              motor_id_,
                              // ROS command values (what we received from ROS topics)
                              target_position_,
