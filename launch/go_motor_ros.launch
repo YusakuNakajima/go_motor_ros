@@ -2,6 +2,11 @@
 <launch>
   <!-- Launch file for Go Motor ROS package -->
   
+  <!-- Arguments for motor parameters -->
+  <arg name="motor_type" default="GO_M8010_6" />
+  <arg name="serial_port" default="/dev/ttyUSB0" />
+  <arg name="control_frequency" default="200.0" />
+  
   <!-- Config file argument -->
   <arg name="config_file" default="$(find go_motor_ros)/config/default_params.yaml" />
   <arg name="launch_gui_tools" default="true" />
@@ -10,7 +15,11 @@
   <rosparam file="$(arg config_file)" command="load" ns="go_motor_ros/go_motor_ros_node" />
   
   <!-- Node for Go Motor ROS (C++ implementation) -->
-  <node name="go_motor_ros_node" pkg="go_motor_ros" type="go_motor_ros_node" output="screen" ns="go_motor_ros" />
+  <node name="go_motor_ros_node" pkg="go_motor_ros" type="go_motor_ros_node" output="screen" ns="go_motor_ros">
+    <param name="motor_type" value="$(arg motor_type)" />
+    <param name="serial_port" value="$(arg serial_port)" />
+    <param name="control_frequency" value="$(arg control_frequency)" />
+  </node>
   
   <!-- GUI Tools -->
   <group if="$(arg launch_gui_tools)">
