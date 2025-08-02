@@ -55,8 +55,10 @@ public:
     {
         // Initialize parameters
         pnh_.param("motor_type", motor_type_, std::string("GO_M8010_6"));
+        // You can use /dev/serial/by-id/xxxx
+        // Example /dev/serial/by-id/usb-FTDI_USB__-__Serial_Converter_FT9HN1N7-if00-port0
         pnh_.param("serial_port", serial_port_, std::string("/dev/ttyUSB0"));
-        pnh_.param("control_frequency", control_frequency_, 1000.0);
+        pnh_.param("control_frequency", control_frequency_, 100.0);
         pnh_.param("kp", kp_, 10.0);
         pnh_.param("kd", kd_, 1.0);
         pnh_.param("id", motor_id_, 0);
@@ -181,27 +183,39 @@ public:
     void controlCallback(const ros::TimerEvent& event)
     {
         try {
-            // Update motor command with current targets
             // Match exact behavior of unitree_actuator_sdk example
+            // Set ALL parameters every cycle like the working example
+            cmd_.motorType = motor_type_enum_;
+            data_.motorType = motor_type_enum_;
+            cmd_.mode = queryMotorMode(motor_type_enum_, MotorMode::FOC);
+            cmd_.id = motor_id_;
+            
             double gear_ratio = queryGearRatio(motor_type_enum_);
             
             // Set motor command exactly like the working example
             cmd_.q = target_position_ * gear_ratio;
-            cmd_.dq = target_velocity_ * gear_ratio;  // Direct multiplication like example
+            cmd_.dq = target_velocity_ * gear_ratio;
             cmd_.tau = target_torque_ / gear_ratio;
             
             // Use raw gains without gear ratio compensation (like example)
             cmd_.kp = kp_;
             cmd_.kd = kd_;
             
-            // Debug: if velocity control and kp=0, warn but don't override
-            if (kp_ < 0.001 && fabs(target_velocity_) > 0.001) {
-                ROS_DEBUG("Velocity control with kp=%.3f (like example)", kp_);
-            }
-            
             // Send command and receive data
             if (serial_) {
-                serial_->sendRecv(&cmd_, &data_);
+                ROS_DEBUG_THROTTLE(1.0, "Sending cmd: type=%d, mode=%d, id=%d, q=%.3f, dq=%.3f, tau=%.3f, kp=%.3f, kd=%.3f",
+                         (int)cmd_.motorType, (int)cmd_.mode, cmd_.id, cmd_.q, cmd_.dq, cmd_.tau, cmd_.kp, cmd_.kd);
+                
+                try {
+                    serial_->sendRecv(&cmd_, &data_);
+                    
+                    ROS_DEBUG_THROTTLE(1.0, "Received data: q=%.3f, dq=%.3f, tau=%.3f, temp=%d, merror=%d",
+                             data_.q, data_.dq, data_.tau, data_.temp, data_.merror);
+                } catch (const std::exception& e) {
+                    ROS_WARN("Communication error: %s", e.what());
+                    // Small delay to avoid flooding the bus
+                    usleep(1000);
+                }
                 
                 // Publish joint state with actual motor data
                 sensor_msgs::JointState joint_state;
