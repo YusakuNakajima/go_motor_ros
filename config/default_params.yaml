@@ -13,7 +13,7 @@ control_frequency: 5000.0       # Control loop frequency in Hz
 # - Mixed Control: Combine position/velocity/torque commands with appropriate gains
 
 id: 0                        # Motor ID (0-15)
-kp: 0                        # Proportional gain for position control (0 = velocity/torque mode)
+kp: 0.1                        # Proportional gain for position control (0 = velocity/torque mode)
 kd: 0.1                     # Derivative gain for damping control
 
 # Recommended settings for different control modes:
@@ -29,5 +29,5 @@ initial_torque: 0.0             # Initial target torque (Nm)
 # Safety parameters
 max_position: 3.14159           # Maximum position limit (radians)
 min_position: -3.14159          # Minimum position limit (radians)
-max_velocity: 10.0              # Maximum velocity limit (rad/s)
-max_torque: 5.0                 # Maximum torque limit (Nm)
+max_velocity: 10.0              # Maximum velocity limit (rad/s), 30 is max in specification
+max_torque: 5.0                 # Maximum torque limit (Nm) , 23.7 is max in specification

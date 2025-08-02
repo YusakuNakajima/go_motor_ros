@@ -13,6 +13,8 @@ This package has been tested with **GO-M8010-6** motors. Support for A1 and B1 m
 
 ## Features
 
+- **Automatic Control Mode Selection**: Automatically selects optimal control parameters based on active commands
+- **Safety Timeout Protection**: Automatically stops motor if no commands received within timeout period  
 - **Dynamic Reconfigure**: Adjust `kp`, `kd`, and `id` parameters in real-time using `rqt_reconfigure`
 - **ROS Parameter Server**: Initialize parameters from launch files or YAML config files
 - **Topic-based Control**: Send position, velocity, and torque commands via ROS topics
@@ -76,37 +78,35 @@ The launch files automatically start `rqt_publisher` for easy command sending th
 #### Using rostopic (Command Line)
 
 #### Position Control Mode
-Set `kp > 1.0` via rqt_reconfigure, then send position commands:
+Simply send position commands - control parameters are automatically configured:
 ```bash
-# Set gains first
-# rqt_reconfigure: kp=10.0, kd=1.0
-
-# Send position command
+# Send position command (automatic: kp=10.0, kd=1.0)
 rostopic pub /go_motor_ros/motor_command/position std_msgs/Float64 "data: 1.57"
+
+# Move to zero position
+rostopic pub /go_motor_ros/motor_command/position std_msgs/Float64 "data: 0.0"
 ```
 
-#### Velocity Control Mode
-Set `kp = 0, kd > 0` via rqt_reconfigure, then send velocity commands:
+#### Velocity Control Mode  
+Simply send velocity commands - control parameters are automatically configured:
 ```bash
-# Set gains first  
-# rqt_reconfigure: kp=0, kd=0.1
-
-# Send velocity command
+# Send velocity command (automatic: kp=0.0, kd=1.0)
 rostopic pub /go_motor_ros/motor_command/velocity std_msgs/Float64 "data: 2.0"
+
+# Stop motor
+rostopic pub /go_motor_ros/motor_command/velocity std_msgs/Float64 "data: 0.0"
 ```
 
 #### Torque Control Mode
-Set `kp = 0, kd = 0` via rqt_reconfigure, then send torque commands:
+Simply send torque commands - control parameters are automatically configured:
 ```bash
-# Set gains first
-# rqt_reconfigure: kp=0, kd=0.01
-
-# Send torque command
+# Send torque command (automatic: kp=0.0, kd=0.0)
 rostopic pub /go_motor_ros/motor_command/torque std_msgs/Float64 "data: 0.5"
 ```
 
 #### Mixed Control Mode
-You can combine position, velocity, and torque commands with appropriate gains.
+When multiple command types are active, the system uses priority: Position > Velocity > Torque.
+Commands can be combined and the appropriate control gains are automatically selected.
 
 ### Monitor Motor State
 
@@ -121,7 +121,8 @@ rostopic echo /go_motor_ros/motor_state
   - Supported types: "A1", "B1", "GO_M8010_6"
 - `serial_port` (string): Serial port for communication (default: "/dev/ttyUSB0")
   - Example: "/dev/ttyUSB0" or "/dev/serial/by-id/usb-FTDI_USB__-__Serial_Converter_FT9HN1N7-if00-port0"
-- `control_frequency` (double): Control loop frequency in Hz (default: 1000.0)
+- `control_frequency` (double): Control loop frequency in Hz (default: 200.0)
+- `command_timeout` (double): Safety timeout for motor commands in seconds (default: 1.0)
 
 ### Dynamic Reconfigure Parameters
 - `id` (int): Motor ID (0-15, default: 0)
@@ -149,8 +150,78 @@ Additional documentation and manuals are available in `catkin_ws/src/go_motor_ro
 
 ### Launch Arguments
 
+- `motor_type`: Motor type (default: "GO_M8010_6")
+- `serial_port`: Serial port path (default: "/dev/ttyUSB0")  
+- `control_frequency`: Control loop frequency in Hz (default: 200.0)
+- `command_timeout`: Safety timeout in seconds (default: 1.0)
 - `config_file`: Path to YAML configuration file
 - `launch_gui_tools`: Whether to launch rqt_reconfigure and rqt_publisher (default: true)
+
+## Automatic Control Mode Selection
+
+The system automatically selects the appropriate control mode and parameters based on which commands are actively being sent:
+
+### Control Mode Priority
+When multiple command types are active simultaneously, the system uses the following priority:
+1. **Position Control** (highest priority)
+2. **Velocity Control** 
+3. **Torque Control** (lowest priority)
+
+### Automatic Parameter Configuration
+
+| Control Mode | Conditions | Auto-Set Parameters | Description |
+|--------------|------------|-------------------|-------------|
+| **Position Control** | Position commands active | `kp = configured value`<br>`kd = configured value` | Full PD control for precise positioning |
+| **Velocity Control** | Velocity commands active<br>(no position commands) | `kp = 0.0`<br>`kd = configured value` | Pure velocity control with damping |
+| **Torque Control** | Torque commands active<br>(no position/velocity commands) | `kp = 0.0`<br>`kd = 0.0` | Direct torque control |
+| **Damping Mode** | No active commands<br>(all timed out) | `kp = 0.0`<br>`kd = configured value` | Free motion with damping |
+
+### Example Usage
+```bash
+# Position control - automatically sets kp=10.0, kd=1.0
+rostopic pub /go_motor_ros/motor_command/position std_msgs/Float64 "data: 1.57"
+
+# Switch to velocity control - automatically sets kp=0.0, kd=1.0  
+rostopic pub /go_motor_ros/motor_command/velocity std_msgs/Float64 "data: 2.0"
+
+# The system automatically switches modes based on the most recent command type
+```
+
+## Safety Timeout Protection
+
+The motor controller includes built-in safety features to prevent runaway conditions:
+
+### Timeout Behavior
+- **Default timeout**: 1.0 second (configurable via `command_timeout` parameter)
+- **Individual monitoring**: Each command type (position, velocity, torque) is monitored separately
+- **Automatic stop**: Motor stops when ALL command types have timed out
+- **Automatic restart**: Motor resumes operation when any new command is received
+
+### Safety Actions
+1. **Normal Operation**: Commands received within timeout → Normal control with appropriate mode
+2. **Partial Timeout**: Some commands timed out → Timed out commands set to zero, others continue
+3. **Full Timeout**: All commands timed out → Emergency stop (zero torque mode: `kp=0, kd=0`)
+4. **Recovery**: New command received → Automatic restart with appropriate control mode
+
+### Configuration Examples
+```bash
+# Short timeout for high-safety applications (0.5 seconds)
+roslaunch go_motor_ros go_motor_ros.launch command_timeout:=0.5
+
+# Longer timeout for slower control systems (3.0 seconds)  
+roslaunch go_motor_ros go_motor_ros.launch command_timeout:=3.0
+
+# Disable GUI tools for production use
+roslaunch go_motor_ros go_motor_ros.launch launch_gui_tools:=false command_timeout:=1.0
+```
+
+### Monitoring Timeout Status
+The system provides detailed logging of timeout status:
+```
+[INFO] Control Mode - pos_cmd=1.570(timeout=NO), vel_cmd=0.000(timeout=YES), torque_cmd=0.000(timeout=YES)
+[WARN] Motor command timeout (1.0 sec) - stopping motor for safety
+[INFO] Motor restarted by position command: 1.570
+```
 
 ## Implementation Details
 
@@ -197,12 +268,12 @@ Motor 0 - CMD: pos=1.570, vel=2.000, torque=0.500, kp=10.000, kd=1.000 | RECV: p
 - `Unknown motor type`: Verify motor_type parameter in config file
 - `Running in simulation mode`: Serial port failed, check hardware connection
 
-### Velocity Control Not Working
-1. **Check kp setting**: Must be 0 for velocity control
-2. **Check kd setting**: Must be > 0 (try 0.1)
-3. **Minimum kp applied**: System automatically applies minimum kp=0.1 for stability
-4. **Monitor raw commands**: Check `RAW_CMD: dq=X.XXX` in log output
-5. **Gear ratio**: Check `GEAR: X.X` value in logs
+### Control Mode Issues
+1. **Position not working**: Check that position commands are being received (not timed out)
+2. **Velocity control not working**: Ensure no position commands are active (they have higher priority)
+3. **Motor stops unexpectedly**: Check timeout settings - may be too short for your application
+4. **Wrong control mode selected**: Check command timeout status in logs
+5. **Monitor control mode**: Look for `Using Position Control Mode` messages in debug logs
 
 ### Debugging
 1. Enable debug messages:

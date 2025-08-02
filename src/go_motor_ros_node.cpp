@@ -246,23 +246,57 @@ public:
                 motor_stopped_by_timeout_ = true;
             }
             
-            // Set motor command - use zero values if timed out
+            // Set motor command - handle timeouts properly for each control mode
             if (motor_stopped_by_timeout_) {
+                // Emergency stop: zero torque mode (manual section 7.6)
                 cmd_.q = 0.0;
                 cmd_.dq = 0.0;
                 cmd_.tau = 0.0;
                 cmd_.kp = 0.0;  // Zero stiffness when stopped
-                cmd_.kd = kd_;  // Keep damping for safety
+                cmd_.kd = 0.0;  // Zero damping for true zero torque mode
             } else {
+                // Normal operation - set commands based on what's active
                 cmd_.q = (position_timeout ? 0.0 : target_position_) * gear_ratio;
                 cmd_.dq = (velocity_timeout ? 0.0 : target_velocity_) * gear_ratio;
                 cmd_.tau = (torque_timeout ? 0.0 : target_torque_) / gear_ratio;
-                cmd_.kp = kp_;
-                cmd_.kd = kd_;
+                
+                // Set gains based on control mode (manual section 7.2-7.4)
+                // Check if commands are active (not timed out) - zero values are valid commands!
+                bool has_position_cmd = !position_timeout;
+                bool has_velocity_cmd = !velocity_timeout;
+                bool has_torque_cmd = !torque_timeout;
+                
+                // Determine control mode based on active commands
+                // Priority: Position > Velocity > Torque (if multiple commands active)
+                if (has_position_cmd) {
+                    // Position control mode (manual 7.2): kp > 0, kd >= 0
+                    cmd_.kp = kp_;
+                    cmd_.kd = kd_;
+                    ROS_DEBUG_THROTTLE(5.0, "Using Position Control Mode: kp=%.3f, kd=%.3f", cmd_.kp, cmd_.kd);
+                } else if (has_velocity_cmd) {
+                    // Speed control mode (manual 7.3): kp = 0, kd > 0  
+                    cmd_.kp = 0.0;
+                    cmd_.kd = kd_;
+                    ROS_DEBUG_THROTTLE(5.0, "Using Velocity Control Mode: kp=%.3f, kd=%.3f", cmd_.kp, cmd_.kd);
+                } else if (has_torque_cmd) {
+                    // Torque control mode (manual 7.5): kp = 0, kd = 0
+                    cmd_.kp = 0.0;
+                    cmd_.kd = 0.0;
+                    ROS_DEBUG_THROTTLE(5.0, "Using Torque Control Mode: kp=%.3f, kd=%.3f", cmd_.kp, cmd_.kd);
+                } else {
+                    // No active commands - damping mode (manual 7.4): kp = 0, kd > 0
+                    cmd_.kp = 0.0;
+                    cmd_.kd = kd_;
+                    ROS_DEBUG_THROTTLE(5.0, "Using Damping Mode (no commands): kp=%.3f, kd=%.3f", cmd_.kp, cmd_.kd);
+                }
             }
             
             // Send command and receive data
             if (serial_) {
+                ROS_INFO_THROTTLE(2.0, "Control Mode - pos_cmd=%.3f(timeout=%s), vel_cmd=%.3f(timeout=%s), torque_cmd=%.3f(timeout=%s)", 
+                         target_position_, position_timeout?"YES":"NO",
+                         target_velocity_, velocity_timeout?"YES":"NO", 
+                         target_torque_, torque_timeout?"YES":"NO");
                 ROS_DEBUG_THROTTLE(1.0, "Sending cmd: type=%d, mode=%d, id=%d, q=%.3f, dq=%.3f, tau=%.3f, kp=%.3f, kd=%.3f",
                          (int)cmd_.motorType, (int)cmd_.mode, cmd_.id, cmd_.q, cmd_.dq, cmd_.tau, cmd_.kp, cmd_.kd);
                 
