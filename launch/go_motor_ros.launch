@@ -6,6 +6,7 @@
   <arg name="motor_type" default="GO_M8010_6" />
   <arg name="serial_port" default="/dev/ttyUSB0" />
   <arg name="control_frequency" default="200.0" />
+  <arg name="command_timeout" default="1.0" />
   
   <!-- Config file argument -->
   <arg name="config_file" default="$(find go_motor_ros)/config/default_params.yaml" />
@@ -19,6 +20,7 @@
     <param name="motor_type" value="$(arg motor_type)" />
     <param name="serial_port" value="$(arg serial_port)" />
     <param name="control_frequency" value="$(arg control_frequency)" />
+    <param name="command_timeout" value="$(arg command_timeout)" />
   </node>
   
   <!-- GUI Tools -->

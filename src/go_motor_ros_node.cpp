@@ -36,6 +36,7 @@ private:
     std::string motor_type_;
     std::string serial_port_;
     double control_frequency_;
+    double command_timeout_;
     
     // Motor control parameters (from dynamic reconfigure)
     double kp_;
@@ -46,6 +47,13 @@ private:
     double target_position_;
     double target_velocity_;
     double target_torque_;
+    
+    // Safety and timeout management
+    ros::Time last_position_cmd_time_;
+    ros::Time last_velocity_cmd_time_;
+    ros::Time last_torque_cmd_time_;
+    bool motor_stopped_by_timeout_;
+    bool any_command_received_;
     
     // Motor type enum
     MotorType motor_type_enum_;
@@ -59,6 +67,7 @@ public:
         // Example /dev/serial/by-id/usb-FTDI_USB__-__Serial_Converter_FT9HN1N7-if00-port0
         pnh_.param("serial_port", serial_port_, std::string("/dev/ttyUSB0"));
         pnh_.param("control_frequency", control_frequency_, 100.0);
+        pnh_.param("command_timeout", command_timeout_, 1.0);  // Default 1 second timeout
         pnh_.param("kp", kp_, 10.0);
         pnh_.param("kd", kd_, 1.0);
         pnh_.param("id", motor_id_, 0);
@@ -67,6 +76,13 @@ public:
         target_position_ = 0.0;
         target_velocity_ = 0.0;
         target_torque_ = 0.0;
+        
+        // Initialize safety variables
+        last_position_cmd_time_ = ros::Time(0);
+        last_velocity_cmd_time_ = ros::Time(0);
+        last_torque_cmd_time_ = ros::Time(0);
+        motor_stopped_by_timeout_ = false;
+        any_command_received_ = false;
         
         // Set motor type enum
         if (motor_type_ == "A1")
@@ -125,6 +141,7 @@ public:
         ROS_INFO("Motor Type: %s", motor_type_.c_str());
         ROS_INFO("Serial Port: %s", serial_port_.c_str());
         ROS_INFO("Control Frequency: %.1f Hz", control_frequency_);
+        ROS_INFO("Command Timeout: %.1f sec", command_timeout_);
         ROS_INFO("Motor ID: %d", motor_id_);
         ROS_INFO("Initial kp: %.2f, kd: %.2f", kp_, kd_);
         ROS_INFO("Motor Mode: FOC (Field Oriented Control)");
@@ -165,18 +182,36 @@ public:
     void positionCallback(const std_msgs::Float64::ConstPtr& msg)
     {
         target_position_ = msg->data;
+        last_position_cmd_time_ = ros::Time::now();
+        any_command_received_ = true;
+        if (motor_stopped_by_timeout_) {
+            ROS_INFO("Motor restarted by position command: %.3f", target_position_);
+            motor_stopped_by_timeout_ = false;
+        }
         ROS_DEBUG("Received position command: %.3f", target_position_);
     }
     
     void velocityCallback(const std_msgs::Float64::ConstPtr& msg)
     {
         target_velocity_ = msg->data;
+        last_velocity_cmd_time_ = ros::Time::now();
+        any_command_received_ = true;
+        if (motor_stopped_by_timeout_) {
+            ROS_INFO("Motor restarted by velocity command: %.3f", target_velocity_);
+            motor_stopped_by_timeout_ = false;
+        }
         ROS_DEBUG("Received velocity command: %.3f", target_velocity_);
     }
     
     void torqueCallback(const std_msgs::Float64::ConstPtr& msg)
     {
         target_torque_ = msg->data;
+        last_torque_cmd_time_ = ros::Time::now();
+        any_command_received_ = true;
+        if (motor_stopped_by_timeout_) {
+            ROS_INFO("Motor restarted by torque command: %.3f", target_torque_);
+            motor_stopped_by_timeout_ = false;
+        }
         ROS_DEBUG("Received torque command: %.3f", target_torque_);
     }
     
@@ -192,14 +227,39 @@ public:
             
             double gear_ratio = queryGearRatio(motor_type_enum_);
             
-            // Set motor command exactly like the working example
-            cmd_.q = target_position_ * gear_ratio;
-            cmd_.dq = target_velocity_ * gear_ratio;
-            cmd_.tau = target_torque_ / gear_ratio;
+            // Check for command timeout
+            ros::Time now = ros::Time::now();
+            bool position_timeout = (now - last_position_cmd_time_).toSec() > command_timeout_;
+            bool velocity_timeout = (now - last_velocity_cmd_time_).toSec() > command_timeout_;
+            bool torque_timeout = (now - last_torque_cmd_time_).toSec() > command_timeout_;
             
-            // Use raw gains without gear ratio compensation (like example)
-            cmd_.kp = kp_;
-            cmd_.kd = kd_;
+            // If no command received yet, use timeout behavior
+            if (!any_command_received_) {
+                position_timeout = velocity_timeout = torque_timeout = true;
+            }
+            
+            // Stop motor if all commands have timed out
+            bool all_commands_timeout = position_timeout && velocity_timeout && torque_timeout;
+            
+            if (all_commands_timeout && !motor_stopped_by_timeout_) {
+                ROS_WARN("Motor command timeout (%.1f sec) - stopping motor for safety", command_timeout_);
+                motor_stopped_by_timeout_ = true;
+            }
+            
+            // Set motor command - use zero values if timed out
+            if (motor_stopped_by_timeout_) {
+                cmd_.q = 0.0;
+                cmd_.dq = 0.0;
+                cmd_.tau = 0.0;
+                cmd_.kp = 0.0;  // Zero stiffness when stopped
+                cmd_.kd = kd_;  // Keep damping for safety
+            } else {
+                cmd_.q = (position_timeout ? 0.0 : target_position_) * gear_ratio;
+                cmd_.dq = (velocity_timeout ? 0.0 : target_velocity_) * gear_ratio;
+                cmd_.tau = (torque_timeout ? 0.0 : target_torque_) / gear_ratio;
+                cmd_.kp = kp_;
+                cmd_.kd = kd_;
+            }
             
             // Send command and receive data
             if (serial_) {
