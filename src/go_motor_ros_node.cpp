@@ -66,7 +66,7 @@ public:
         // You can use /dev/serial/by-id/xxxx
         // Example /dev/serial/by-id/usb-FTDI_USB__-__Serial_Converter_FT9HN1N7-if00-port0
         pnh_.param("serial_port", serial_port_, std::string("/dev/ttyUSB0"));
-        pnh_.param("control_frequency", control_frequency_, 100.0);
+        pnh_.param("control_frequency", control_frequency_, 200.0);
         pnh_.param("command_timeout", command_timeout_, 1.0);  // Default 1 second timeout
         pnh_.param("kp", kp_, 10.0);
         pnh_.param("kd", kd_, 1.0);
